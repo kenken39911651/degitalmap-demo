@@ -45,9 +45,12 @@ function formatDate(iso: string) {
 
 function makePinElement(color: string, cancelled: boolean, emoji: string) {
   const el = document.createElement("div");
+  // touch-actionを指定しないと、ピンの上から指でピンチ操作を始めたときに
+  // ブラウザ標準のタッチ処理と地図側のジェスチャー処理が競合し、ズームの
+  // 中心がずれたような挙動になることがある。地図本体と同様にnoneにする。
   el.style.cssText = `
     position:relative; width:30px; height:30px; cursor:pointer;
-    opacity:${cancelled ? "0.45" : "1"};
+    opacity:${cancelled ? "0.45" : "1"}; touch-action:none;
   `;
   el.innerHTML = `
     <div style="
@@ -196,6 +199,7 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
       background:#2b2a26; color:#fff; border-radius:999px;
       width:34px; height:34px; display:flex; align-items:center; justify-content:center;
       font-size:16px; box-shadow:0 2px 8px rgba(0,0,0,0.35); border:2px solid #fff;
+      touch-action:none;
     `;
     el.textContent = "📍";
 
