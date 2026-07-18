@@ -28,10 +28,11 @@ async function getPublishedMap(slug: string) {
       .order("sort_order"),
     supabase
       .from("pins")
-      .select("*")
+      .select("*, sessions:pin_sessions(*)")
       .eq("map_id", map.id)
       .neq("status", "hidden")
-      .order("sort_order"),
+      .order("sort_order")
+      .order("sort_order", { foreignTable: "pin_sessions" }),
   ]);
 
   return {

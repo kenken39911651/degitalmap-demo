@@ -49,6 +49,18 @@ export interface Pin {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  /** Only populated when fetched via a nested Supabase select. */
+  sessions?: PinSession[];
+}
+
+export interface PinSession {
+  id: string;
+  pin_id: string;
+  title: string;
+  start_time: string | null; // "HH:MM:SS" (Supabase time type)
+  end_time: string | null;
+  description: string | null;
+  sort_order: number;
 }
 
 export interface Organization {

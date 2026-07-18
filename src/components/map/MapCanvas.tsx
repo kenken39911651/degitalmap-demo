@@ -53,6 +53,29 @@ function makePinElement(color: string, cancelled: boolean) {
   return el;
 }
 
+function formatSessionTime(t: string | null) {
+  return t ? t.slice(0, 5) : "";
+}
+
+function sessionListHtml(pin: Pin) {
+  const sessions = pin.sessions;
+  if (!sessions || sessions.length === 0) return "";
+  const rows = sessions
+    .map((s) => {
+      const time = [formatSessionTime(s.start_time), formatSessionTime(s.end_time)]
+        .filter(Boolean)
+        .join("〜");
+      return `<li>${time ? `<span class="popup-schedule-time">${escapeHtml(time)}</span>` : ""}${escapeHtml(s.title)}</li>`;
+    })
+    .join("");
+  return `
+    <div class="popup-schedule">
+      <div class="popup-schedule-title">プログラム</div>
+      <ul class="popup-schedule-list">${rows}</ul>
+    </div>
+  `;
+}
+
 function popupHtml(pin: Pin, category: MapCategory | undefined) {
   const cancelledBadge =
     pin.status === "cancelled"
@@ -69,6 +92,7 @@ function popupHtml(pin: Pin, category: MapCategory | undefined) {
       ${pin.place_note ? `<div class="popup-meta">📍 ${escapeHtml(pin.place_note)}</div>` : ""}
       ${pin.description ? `<div class="popup-desc">${escapeHtml(pin.description)}</div>` : ""}
       ${category ? `<div class="popup-meta">${escapeHtml(category.label)}</div>` : ""}
+      ${sessionListHtml(pin)}
     </div>
   `;
 }

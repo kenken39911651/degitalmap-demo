@@ -72,7 +72,12 @@ export async function getMapForEditing(mapId: string): Promise<{
 
   const [{ data: categories }, { data: pins }] = await Promise.all([
     supabase.from("map_categories").select("*").eq("map_id", mapId).order("sort_order"),
-    supabase.from("pins").select("*").eq("map_id", mapId).order("sort_order"),
+    supabase
+      .from("pins")
+      .select("*, sessions:pin_sessions(*)")
+      .eq("map_id", mapId)
+      .order("sort_order")
+      .order("sort_order", { foreignTable: "pin_sessions" }),
   ]);
 
   return {

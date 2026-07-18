@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import type { MapCategory, Pin } from "@/lib/types";
-import { createPin, updatePin, deletePin } from "@/lib/actions/pins";
+import { createPin, updatePin, deletePin, type SessionInput } from "@/lib/actions/pins";
 
 interface PinFormProps {
   mapId: string;
@@ -15,6 +15,11 @@ interface PinFormProps {
 
 const EMOJI_CHOICES = ["📍", "🏮", "🍽️", "🎤", "🚻", "🚑", "🧸", "🎁", "🧯", "📦"];
 
+function timeValue(t: string | null): string {
+  // Supabaseのtime型は"17:00:00"で返るが、<input type="time">は"17:00"を要求する
+  return t ? t.slice(0, 5) : "";
+}
+
 export default function PinForm({ mapId, categories, target, onClose, onAddCategory }: PinFormProps) {
   const existing = target.mode === "edit" ? target.pin : null;
   const [title, setTitle] = useState(existing?.title ?? "");
@@ -26,9 +31,29 @@ export default function PinForm({ mapId, categories, target, onClose, onAddCateg
   const [date, setDate] = useState(existing?.date ?? "");
   const [timeLabel, setTimeLabel] = useState(existing?.time_label ?? "");
   const [description, setDescription] = useState(existing?.description ?? "");
+  const [sessions, setSessions] = useState<SessionInput[]>(
+    (existing?.sessions ?? []).map((s) => ({
+      title: s.title,
+      startTime: timeValue(s.start_time),
+      endTime: timeValue(s.end_time),
+      description: s.description ?? "",
+    }))
+  );
   const status = existing?.status ?? "active";
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+
+  function updateSession(index: number, patch: Partial<SessionInput>) {
+    setSessions((prev) => prev.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+  }
+
+  function addSession() {
+    setSessions((prev) => [...prev, { title: "", startTime: "", endTime: "" }]);
+  }
+
+  function removeSession(index: number) {
+    setSessions((prev) => prev.filter((_, i) => i !== index));
+  }
 
   function handleSave() {
     if (!title.trim()) {
@@ -50,6 +75,7 @@ export default function PinForm({ mapId, categories, target, onClose, onAddCateg
             placeNote,
             date,
             timeLabel,
+            sessions,
           });
         } else {
           await updatePin({
@@ -63,6 +89,7 @@ export default function PinForm({ mapId, categories, target, onClose, onAddCateg
             date,
             timeLabel,
             status,
+            sessions,
           });
         }
         onClose();
@@ -188,6 +215,54 @@ export default function PinForm({ mapId, categories, target, onClose, onAddCateg
               className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-normal dark:border-neutral-700 dark:bg-neutral-950"
             />
           </label>
+
+          <div className="flex flex-col gap-2 border-t border-neutral-200 pt-3 dark:border-neutral-800">
+            <span className="text-sm font-medium">
+              プログラム（この会場で複数の企画がある場合）
+            </span>
+            {sessions.map((s, i) => (
+              <div
+                key={i}
+                className="flex flex-col gap-2 rounded-lg border border-neutral-200 p-2 dark:border-neutral-800"
+              >
+                <div className="flex items-center gap-2">
+                  <input
+                    type="time"
+                    value={s.startTime}
+                    onChange={(e) => updateSession(i, { startTime: e.target.value })}
+                    className="rounded-lg border border-neutral-300 px-2 py-1.5 text-xs dark:border-neutral-700 dark:bg-neutral-950"
+                  />
+                  <span className="text-xs text-neutral-400">〜</span>
+                  <input
+                    type="time"
+                    value={s.endTime}
+                    onChange={(e) => updateSession(i, { endTime: e.target.value })}
+                    className="rounded-lg border border-neutral-300 px-2 py-1.5 text-xs dark:border-neutral-700 dark:bg-neutral-950"
+                  />
+                  <input
+                    value={s.title}
+                    onChange={(e) => updateSession(i, { title: e.target.value })}
+                    placeholder="プログラム名（例：開会式）"
+                    className="min-w-0 flex-1 rounded-lg border border-neutral-300 px-2 py-1.5 text-xs dark:border-neutral-700 dark:bg-neutral-950"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeSession(i)}
+                    className="shrink-0 text-xs text-red-600"
+                  >
+                    削除
+                  </button>
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={addSession}
+              className="self-start rounded-full border border-dashed border-neutral-400 px-3 py-1 text-xs font-semibold text-neutral-500"
+            >
+              + プログラムを追加
+            </button>
+          </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
