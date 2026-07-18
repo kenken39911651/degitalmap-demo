@@ -50,8 +50,14 @@ function makePinElement(color: string, cancelled: boolean, emoji: string) {
   // touch-actionを指定しないと、ピンの上から指でピンチ操作を始めたときに
   // ブラウザ標準のタッチ処理と地図側のジェスチャー処理が競合し、ズームの
   // 中心がずれたような挙動になることがある。地図本体と同様にnoneにする。
+  //
+  // position:absoluteが重要: relativeのままだと通常の文書フローにも乗って
+  // しまい、MapLibreのtransformによる配置に加えて生成順に応じたわずかな
+  // 縦ズレが積み重なる。広域ズームで実距離のピクセル差がほぼ0になると、
+  // このズレだけが目立ってピンが無関係な場所に散らばって見えるバグの原因
+  // だった。absoluteでフローから外すことでtransformのみが位置を決める。
   el.style.cssText = `
-    position:relative; width:30px; height:30px; cursor:pointer;
+    position:absolute; width:30px; height:30px; cursor:pointer;
     opacity:${cancelled ? "0.45" : "1"}; touch-action:none;
   `;
   el.innerHTML = `
@@ -198,7 +204,10 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
     if (!map || !showCenterMarker) return;
 
     const el = document.createElement("div");
+    // position:absoluteが必須の理由はピンのマーカーと同じ(下のmakePinElement
+    // のコメント参照)。
     el.style.cssText = `
+      position:absolute;
       background:#2b2a26; color:#fff; border-radius:999px;
       width:34px; height:34px; display:flex; align-items:center; justify-content:center;
       font-size:16px; box-shadow:0 2px 8px rgba(0,0,0,0.35); border:2px solid #fff;
