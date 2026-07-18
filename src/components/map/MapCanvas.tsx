@@ -23,6 +23,8 @@ interface MapCanvasProps {
   basemap: "std" | "photo";
   brandColor?: string;
   centerLabel?: string;
+  /** 管理画面では実ピンと重なって紛らわしいため非表示にする(既定は表示)。 */
+  showCenterMarker?: boolean;
   categories: MapCategory[];
   pins: Pin[];
   activeCategoryIds: Set<string>;
@@ -117,6 +119,7 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
     basemap,
     brandColor = "#c0472e",
     centerLabel,
+    showCenterMarker = true,
     categories,
     pins,
     activeCategoryIds,
@@ -192,7 +195,7 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
   // Center marker
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !showCenterMarker) return;
 
     const el = document.createElement("div");
     el.style.cssText = `
@@ -219,7 +222,7 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
     return () => {
       marker.remove();
     };
-  }, [centerLat, centerLng, centerLabel]);
+  }, [centerLat, centerLng, centerLabel, showCenterMarker]);
 
   // Pin markers, re-rendered when data/filter changes
   useEffect(() => {

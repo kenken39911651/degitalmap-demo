@@ -125,6 +125,7 @@ export default function AdminMapEditor({ map, categories, pins }: AdminMapEditor
             basemap={map.basemap}
             brandColor={map.brand_color}
             centerLabel={map.title}
+            showCenterMarker={false}
             categories={categories}
             pins={pins}
             activeCategoryIds={activeCategoryIds}
