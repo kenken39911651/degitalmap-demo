@@ -10,6 +10,35 @@ export function styleUrlFor(basemap: "std" | "photo"): string {
   return `https://api.maptiler.com/maps/${style}/style.json?key=${key}`;
 }
 
+// MapTilerの既定スタイルはラベルがname:en(英語)優先になっているため、
+// name:ja -> name(現地表記) -> name:en の優先順に切り替える。
+const LABEL_LAYER_IDS = [
+  "Continent labels",
+  "Country labels",
+  "City labels",
+  "Place labels",
+  "Road labels",
+  "Station labels",
+  "Airport labels",
+];
+
+export function applyJapaneseLabels(map: maplibregl.Map) {
+  for (const layerId of LABEL_LAYER_IDS) {
+    try {
+      if (map.getLayer(layerId)) {
+        map.setLayoutProperty(layerId, "text-field", [
+          "coalesce",
+          ["get", "name:ja"],
+          ["get", "name"],
+          ["get", "name:en"],
+        ]);
+      }
+    } catch {
+      // レイヤーが存在しない/対応していない場合は無視
+    }
+  }
+}
+
 // ブランドカラーで基図をうっすら着色する（basic-v2スタイルのみ対象。
 // 衛星写真スタイルは実写画像のため着色しない）。MapTilerのスタイル内の
 // レイヤーIDはバージョンで揺れがあるため、候補をいくつか試し、
@@ -85,7 +114,10 @@ export class BasemapToggleControl implements maplibregl.IControl {
         const targetMap = this.map;
         if (targetMap) {
           targetMap.setStyle(styleUrlFor(next));
-          targetMap.once("style.load", () => applyBrandTint(targetMap, next, this.brandColor));
+          targetMap.once("style.load", () => {
+            applyBrandTint(targetMap, next, this.brandColor);
+            applyJapaneseLabels(targetMap);
+          });
         }
         this.onChange(next);
       });

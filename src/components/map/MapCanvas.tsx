@@ -4,7 +4,12 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { MapCategory, Pin } from "@/lib/types";
-import { applyBrandTint, BasemapToggleControl, styleUrlFor } from "./maptilerBasemap";
+import {
+  applyBrandTint,
+  applyJapaneseLabels,
+  BasemapToggleControl,
+  styleUrlFor,
+} from "./maptilerBasemap";
 
 export interface MapCanvasHandle {
   flyTo(lat: number, lng: number, zoom?: number): void;
@@ -113,7 +118,10 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
       "top-right"
     );
 
-    map.once("style.load", () => applyBrandTint(map, basemap, brandColor));
+    map.once("style.load", () => {
+      applyBrandTint(map, basemap, brandColor);
+      applyJapaneseLabels(map);
+    });
 
     map.on("click", (e) => {
       onMapClickRef.current?.(e.lngLat.lat, e.lngLat.lng);
@@ -189,7 +197,14 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
             .setLngLat([pin.lng, pin.lat])
             .setPopup(popup)
             .addTo(map!);
-          el.addEventListener("click", () => onMarkerClickRef.current?.(pin.id));
+          // MapLibreの「マーカークリックでポップアップ開閉」は地図のclickイベント
+          // 経由の間接的な仕組みで、確実に発火するとは限らない。自前のクリック
+          // ハンドラで直接開閉する。
+          el.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (!popup.isOpen()) marker.togglePopup();
+            onMarkerClickRef.current?.(pin.id);
+          });
           markersRef.current[pin.id] = marker;
         });
     }
@@ -203,6 +218,7 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
     applyBrandTint(map, basemap, brandColor);
+    applyJapaneseLabels(map);
   }, [basemap, brandColor]);
 
   useImperativeHandle(ref, () => ({
@@ -210,7 +226,13 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
       mapRef.current?.flyTo({ center: [lng, lat], zoom: targetZoom, duration: 600 });
     },
     openPopup(pinId) {
-      markersRef.current[pinId]?.togglePopup();
+      // マーカー自体のクリックでは、MapLibre標準の挙動で既にポップアップが
+      // 開いているため、ここでtogglePopup()すると閉じてしまう。既に開いて
+      // いる場合は何もしない、閉じている場合だけ開く(冪等)。
+      const marker = markersRef.current[pinId];
+      if (marker && !marker.getPopup()?.isOpen()) {
+        marker.togglePopup();
+      }
     },
   }));
 
