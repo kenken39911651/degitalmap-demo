@@ -3,9 +3,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SITE_GATE_COOKIE, expectedGateValue } from "@/lib/siteGate";
 
 // Next.js 16renames Middleware to Proxy (same underlying mechanism/API).
-// This refreshes the Supabase session cookie on every request, optionally
-// gates the entire site behind a shared testing password, and gates /admin
-// routes behind real Supabase authentication.
+// This optionally gates the entire site behind a shared testing password,
+// and gates /admin routes behind real Supabase authentication (refreshing
+// the session cookie only for those requests).
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
@@ -21,6 +21,14 @@ export async function proxy(request: NextRequest) {
         return NextResponse.redirect(gateUrl);
       }
     }
+  }
+
+  // /admin以外は認証不要(公開マップ・ゲート・ログイン画面など)。ここで
+  // 抜けることで、Supabase Authへのネットワーク往復を来場者のアクセスでは
+  // 発生させない。以前は全ページで毎回getUser()を呼んでおり、その応答が
+  // 少しでも遅いと公開マップの表示まで巻き添えで遅くなっていた。
+  if (!pathname.startsWith("/admin")) {
+    return NextResponse.next();
   }
 
   let response = NextResponse.next({ request });
@@ -48,7 +56,7 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && pathname.startsWith("/admin")) {
+  if (!user) {
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }
