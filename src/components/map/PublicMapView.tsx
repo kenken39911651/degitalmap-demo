@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { EventMap, MapCategory, Pin } from "@/lib/types";
 import MapCanvas, { type MapCanvasHandle } from "./MapCanvas";
-import CategoryChips from "./CategoryChips";
+import CategoryTabs from "./CategoryTabs";
 import PinList from "./PinList";
 import MobileDrawer from "./MobileDrawer";
 
@@ -23,9 +23,7 @@ interface PublicMapViewProps {
 }
 
 export default function PublicMapView({ map, categories, pins }: PublicMapViewProps) {
-  const [activeCategoryIds, setActiveCategoryIds] = useState<Set<string>>(
-    () => new Set(categories.map((c) => c.id))
-  );
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [activePinId, setActivePinId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -37,23 +35,22 @@ export default function PublicMapView({ map, categories, pins }: PublicMapViewPr
   const filteredPins = useMemo(() => {
     const q = search.trim().toLowerCase();
     return visiblePins
-      .filter((p) => !p.category_id || activeCategoryIds.has(p.category_id))
+      .filter((p) => selectedCategoryId === null || p.category_id === selectedCategoryId)
       .filter(
         (p) =>
           !q ||
           `${p.title}${p.place_note ?? ""}`.toLowerCase().includes(q)
       )
       .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
-  }, [visiblePins, activeCategoryIds, search]);
+  }, [visiblePins, selectedCategoryId, search]);
 
-  function toggleCategory(id: string) {
-    setActiveCategoryIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
+  const activeCategoryIds = useMemo(
+    () =>
+      selectedCategoryId === null
+        ? new Set(categories.map((c) => c.id))
+        : new Set([selectedCategoryId]),
+    [selectedCategoryId, categories]
+  );
 
   function selectPin(pinId: string, opts: { fromMap: boolean } = { fromMap: false }) {
     setActivePinId(pinId);
@@ -114,11 +111,11 @@ export default function PublicMapView({ map, categories, pins }: PublicMapViewPr
         </div>
 
         <fieldset className="filter-block">
-          <legend>カテゴリで絞り込み</legend>
-          <CategoryChips
+          <legend>会場で絞り込み</legend>
+          <CategoryTabs
             categories={categories}
-            activeCategoryIds={activeCategoryIds}
-            onToggle={toggleCategory}
+            selectedCategoryId={selectedCategoryId}
+            onSelect={setSelectedCategoryId}
           />
         </fieldset>
 
