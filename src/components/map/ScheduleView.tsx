@@ -31,7 +31,10 @@ interface FallbackRow {
   cancelled: boolean;
 }
 
-const ROW_HEIGHT = 56; // 1時間あたりの高さ(px)
+const ROW_HEIGHT = 64; // 1時間あたりの高さ(px)
+const MIN_BLOCK_HEIGHT = 34; // 短時間の項目でも文字が読める最低の高さ(px)
+const LANE_WIDTH = 116; // 1レーンあたりの幅(px)。会場列の幅を決めるのにも使う
+const MIN_COLUMN_WIDTH = 150; // 会場列の最低幅(px)
 const DEFAULT_DURATION = 60; // 終了時刻が分からない場合の仮の長さ(分)
 
 function formatMinutes(total: number) {
@@ -60,7 +63,7 @@ export default function ScheduleView({ pins, categories, hiddenVenues }: Schedul
     [categories]
   );
 
-  const { venues, entriesByVenue, gridStart, gridEnd, fallbackRows } = useMemo(() => {
+  const { venues, entriesByVenue, columnWidthByVenue, gridStart, gridEnd, fallbackRows } = useMemo(() => {
     const hidden = new Set(hiddenVenues);
     const venueOrder: string[] = [];
     const rawByVenue = new Map<string, Omit<GridEntry, "lane" | "laneCount">[]>();
@@ -136,8 +139,11 @@ export default function ScheduleView({ pins, categories, hiddenVenues }: Schedul
       }
     }
 
-    // 同じ会場内で時間帯が重なる項目は横に並べる(レーン割り当て)。
+    // 同じ会場内で時間帯が重なる項目は横に並べる(レーン割り当て)。会場列の幅は
+    // 最大レーン数から決め、狭い場所に無理に収めて潰れないようにする(収まら
+    // ない分は横スクロールで見る)。
     const entriesByVenue = new Map<string, GridEntry[]>();
+    const columnWidthByVenue = new Map<string, number>();
     for (const venue of venueOrder) {
       const raw = [...rawByVenue.get(venue)!].sort((a, b) => a.startMinutes - b.startMinutes);
       const laneEnds: number[] = [];
@@ -154,12 +160,20 @@ export default function ScheduleView({ pins, categories, hiddenVenues }: Schedul
       const laneCount = Math.max(laneEnds.length, 1);
       withLane.forEach((e) => (e.laneCount = laneCount));
       entriesByVenue.set(venue, withLane);
+      columnWidthByVenue.set(venue, Math.max(MIN_COLUMN_WIDTH, laneCount * LANE_WIDTH));
     }
 
     const gridStart = Number.isFinite(minStart) ? Math.floor(minStart / 60) * 60 : 9 * 60;
     const gridEnd = Number.isFinite(maxEnd) ? Math.ceil(maxEnd / 60) * 60 : 18 * 60;
 
-    return { venues: venueOrder, entriesByVenue, gridStart, gridEnd, fallbackRows: fallback };
+    return {
+      venues: venueOrder,
+      entriesByVenue,
+      columnWidthByVenue,
+      gridStart,
+      gridEnd,
+      fallbackRows: fallback,
+    };
   }, [pins, categoryById, hiddenVenues]);
 
   if (venues.length === 0 && fallbackRows.length === 0) {
@@ -179,11 +193,19 @@ export default function ScheduleView({ pins, categories, hiddenVenues }: Schedul
       {venues.length > 0 && (
         <div
           className="schedule-grid"
-          style={{ gridTemplateColumns: `56px repeat(${venues.length}, minmax(140px, 1fr))` }}
+          style={{
+            gridTemplateColumns: `56px ${venues
+              .map((v) => `${columnWidthByVenue.get(v)}px`)
+              .join(" ")}`,
+          }}
         >
           <div className="schedule-grid-corner" />
           {venues.map((v) => (
-            <div key={v} className="schedule-grid-venue-header">
+            <div
+              key={v}
+              className="schedule-grid-venue-header"
+              style={{ width: columnWidthByVenue.get(v) }}
+            >
               {v}
             </div>
           ))}
@@ -197,7 +219,11 @@ export default function ScheduleView({ pins, categories, hiddenVenues }: Schedul
           </div>
 
           {venues.map((venue) => (
-            <div key={venue} className="schedule-grid-column" style={{ height: totalHeight }}>
+            <div
+              key={venue}
+              className="schedule-grid-column"
+              style={{ height: totalHeight, width: columnWidthByVenue.get(venue) }}
+            >
               {hours.map((h) => (
                 <div
                   key={h}
@@ -211,9 +237,9 @@ export default function ScheduleView({ pins, categories, hiddenVenues }: Schedul
                   className="schedule-block"
                   style={{
                     top: ((e.startMinutes - gridStart) / 60) * ROW_HEIGHT,
-                    height: Math.max(((e.endMinutes - e.startMinutes) / 60) * ROW_HEIGHT, 22),
-                    left: `${(e.lane / e.laneCount) * 100}%`,
-                    width: `${(1 / e.laneCount) * 100}%`,
+                    height: Math.max(((e.endMinutes - e.startMinutes) / 60) * ROW_HEIGHT, MIN_BLOCK_HEIGHT),
+                    left: e.lane * LANE_WIDTH,
+                    width: LANE_WIDTH,
                     background: `color-mix(in srgb, ${e.color} 18%, var(--map-surface))`,
                     borderLeftColor: e.color,
                     opacity: e.cancelled ? 0.5 : 1,
