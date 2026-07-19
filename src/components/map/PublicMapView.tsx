@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { EventMap, MapCategory, Pin } from "@/lib/types";
 import MapCanvas, { type MapCanvasHandle } from "./MapCanvas";
-import CategoryTabs from "./CategoryTabs";
+import VenueTabs from "./VenueTabs";
 import PinList from "./PinList";
 import MobileDrawer from "./MobileDrawer";
 
@@ -23,7 +23,7 @@ interface PublicMapViewProps {
 }
 
 export default function PublicMapView({ map, categories, pins }: PublicMapViewProps) {
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedVenue, setSelectedVenue] = useState<string | null>(null);
   const [activePinId, setActivePinId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -32,25 +32,31 @@ export default function PublicMapView({ map, categories, pins }: PublicMapViewPr
 
   const visiblePins = useMemo(() => pins.filter((p) => p.status !== "hidden"), [pins]);
 
+  const venues = useMemo(() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const p of visiblePins) {
+      if (p.place_note && !seen.has(p.place_note)) {
+        seen.add(p.place_note);
+        list.push(p.place_note);
+      }
+    }
+    return list;
+  }, [visiblePins]);
+
   const filteredPins = useMemo(() => {
     const q = search.trim().toLowerCase();
     return visiblePins
-      .filter((p) => selectedCategoryId === null || p.category_id === selectedCategoryId)
+      .filter((p) => selectedVenue === null || p.place_note === selectedVenue)
       .filter(
         (p) =>
           !q ||
           `${p.title}${p.place_note ?? ""}`.toLowerCase().includes(q)
       )
       .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""));
-  }, [visiblePins, selectedCategoryId, search]);
+  }, [visiblePins, selectedVenue, search]);
 
-  const activeCategoryIds = useMemo(
-    () =>
-      selectedCategoryId === null
-        ? new Set(categories.map((c) => c.id))
-        : new Set([selectedCategoryId]),
-    [selectedCategoryId, categories]
-  );
+  const activeCategoryIds = useMemo(() => new Set(categories.map((c) => c.id)), [categories]);
 
   function selectPin(pinId: string, opts: { fromMap: boolean } = { fromMap: false }) {
     setActivePinId(pinId);
@@ -110,14 +116,12 @@ export default function PublicMapView({ map, categories, pins }: PublicMapViewPr
           />
         </div>
 
-        <fieldset className="filter-block">
-          <legend>会場で絞り込み</legend>
-          <CategoryTabs
-            categories={categories}
-            selectedCategoryId={selectedCategoryId}
-            onSelect={setSelectedCategoryId}
-          />
-        </fieldset>
+        {venues.length > 0 && (
+          <fieldset className="filter-block">
+            <legend>会場で絞り込み</legend>
+            <VenueTabs venues={venues} selectedVenue={selectedVenue} onSelect={setSelectedVenue} />
+          </fieldset>
+        )}
 
         <div className="list-block">
           <div className="list-header">
