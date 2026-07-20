@@ -9,7 +9,7 @@ interface ScheduleViewProps {
   hiddenVenues: string[];
 }
 
-interface GridEntry {
+interface RawEntry {
   key: string;
   startMinutes: number;
   endMinutes: number;
@@ -18,8 +18,17 @@ interface GridEntry {
   color: string;
   cancelled: boolean;
   timeText: string;
-  lane: number;
-  laneCount: number;
+}
+
+interface GridEntry {
+  key: string;
+  top: number;
+  height: number;
+  label: string;
+  emoji: string;
+  color: string;
+  cancelled: boolean;
+  timeText: string;
 }
 
 interface FallbackRow {
@@ -31,10 +40,10 @@ interface FallbackRow {
   cancelled: boolean;
 }
 
-const ROW_HEIGHT = 64; // 1時間あたりの高さ(px)
-const MIN_BLOCK_HEIGHT = 34; // 短時間の項目でも文字が読める最低の高さ(px)
-const LANE_WIDTH = 116; // 1レーンあたりの幅(px)。会場列の幅を決めるのにも使う
-const MIN_COLUMN_WIDTH = 150; // 会場列の最低幅(px)
+const ROW_HEIGHT = 80; // 1時間あたりの高さ(px)。時間軸に沿った自然な間隔で
+// 重ならないよう、短い項目でも余裕を持たせるために大きめにしている
+const MIN_BLOCK_HEIGHT = 36; // 短時間の項目でも文字が読める最低の高さ(px)
+const COLUMN_WIDTH = 220; // 会場列の幅(px)。項目は横に並べず、常にこの1列に縦積みする
 const DEFAULT_DURATION = 60; // 終了時刻が分からない場合の仮の長さ(分)
 
 function formatMinutes(total: number) {
@@ -63,10 +72,10 @@ export default function ScheduleView({ pins, categories, hiddenVenues }: Schedul
     [categories]
   );
 
-  const { venues, entriesByVenue, columnWidthByVenue, gridStart, gridEnd, fallbackRows } = useMemo(() => {
+  const { venues, entriesByVenue, gridStart, gridEnd, fallbackRows, totalHeight } = useMemo(() => {
     const hidden = new Set(hiddenVenues);
     const venueOrder: string[] = [];
-    const rawByVenue = new Map<string, Omit<GridEntry, "lane" | "laneCount">[]>();
+    const rawByVenue = new Map<string, RawEntry[]>();
     const fallback: FallbackRow[] = [];
     let minStart = Infinity;
     let maxEnd = -Infinity;
@@ -76,7 +85,7 @@ export default function ScheduleView({ pins, categories, hiddenVenues }: Schedul
       const category = pin.category_id ? categoryById[pin.category_id] : undefined;
       const color = category?.color ?? "#6b7280";
       const cancelled = pin.status === "cancelled";
-      const rawEntries: Omit<GridEntry, "lane" | "laneCount">[] = [];
+      const rawEntries: RawEntry[] = [];
 
       if (pin.sessions && pin.sessions.length > 0) {
         for (const s of pin.sessions) {
@@ -139,46 +148,46 @@ export default function ScheduleView({ pins, categories, hiddenVenues }: Schedul
       }
     }
 
-    // 同じ会場内で時間帯が重なる項目は横に並べる(レーン割り当て)。会場列の幅は
-    // 最大レーン数から決め、狭い場所に無理に収めて潰れないようにする(収まら
-    // ない分は横スクロールで見る)。
-    // 実データ上は重なっていなくても、MIN_BLOCK_HEIGHTの下限で見た目の高さが
-    // 引き伸ばされるせいで、間隔の狭い項目同士が視覚的に重なることがある
-    // (例: 5分間の項目が10分おきに並ぶ場合)。そのため「見た目上占有する時間」
-    // をMIN_BLOCK_HEIGHT分だけ底上げしてからレーンの空き判定を行う。
-    const minBlockMinutes = (MIN_BLOCK_HEIGHT / ROW_HEIGHT) * 60;
-    const entriesByVenue = new Map<string, GridEntry[]>();
-    const columnWidthByVenue = new Map<string, number>();
-    for (const venue of venueOrder) {
-      const raw = [...rawByVenue.get(venue)!].sort((a, b) => a.startMinutes - b.startMinutes);
-      const laneEnds: number[] = [];
-      const withLane: GridEntry[] = raw.map((e) => {
-        const visualEnd = Math.max(e.endMinutes, e.startMinutes + minBlockMinutes);
-        let lane = laneEnds.findIndex((end) => end <= e.startMinutes);
-        if (lane === -1) {
-          lane = laneEnds.length;
-          laneEnds.push(visualEnd);
-        } else {
-          laneEnds[lane] = visualEnd;
-        }
-        return { ...e, lane, laneCount: 0 };
-      });
-      const laneCount = Math.max(laneEnds.length, 1);
-      withLane.forEach((e) => (e.laneCount = laneCount));
-      entriesByVenue.set(venue, withLane);
-      columnWidthByVenue.set(venue, Math.max(MIN_COLUMN_WIDTH, laneCount * LANE_WIDTH));
-    }
-
     const gridStart = Number.isFinite(minStart) ? Math.floor(minStart / 60) * 60 : 9 * 60;
     const gridEnd = Number.isFinite(maxEnd) ? Math.ceil(maxEnd / 60) * 60 : 18 * 60;
+    const timeAxisHeight = ((gridEnd - gridStart) / 60) * ROW_HEIGHT;
+
+    // 会場ごとに、時刻に比例した位置を基本にしつつ、直前の項目と重なりそうな
+    // 場合だけ下にずらして縦に積む(横には広げない)。項目が密集している会場が
+    // あると、その分だけ全体の高さが伸びる(グリッドの列は共通の座標系を
+    // 共有するため、時間目盛りとの対応がその会場だけ少しずれることがある)。
+    const entriesByVenue = new Map<string, GridEntry[]>();
+    let maxBottom = timeAxisHeight;
+    for (const venue of venueOrder) {
+      const raw = [...rawByVenue.get(venue)!].sort((a, b) => a.startMinutes - b.startMinutes);
+      let prevBottom = 0;
+      const placed: GridEntry[] = raw.map((e) => {
+        const idealTop = ((e.startMinutes - gridStart) / 60) * ROW_HEIGHT;
+        const height = Math.max(((e.endMinutes - e.startMinutes) / 60) * ROW_HEIGHT, MIN_BLOCK_HEIGHT);
+        const top = Math.max(idealTop, prevBottom);
+        prevBottom = top + height;
+        maxBottom = Math.max(maxBottom, prevBottom);
+        return {
+          key: e.key,
+          top,
+          height,
+          label: e.label,
+          emoji: e.emoji,
+          color: e.color,
+          cancelled: e.cancelled,
+          timeText: e.timeText,
+        };
+      });
+      entriesByVenue.set(venue, placed);
+    }
 
     return {
       venues: venueOrder,
       entriesByVenue,
-      columnWidthByVenue,
       gridStart,
       gridEnd,
       fallbackRows: fallback,
+      totalHeight: maxBottom,
     };
   }, [pins, categoryById, hiddenVenues]);
 
@@ -192,26 +201,17 @@ export default function ScheduleView({ pins, categories, hiddenVenues }: Schedul
 
   const hours: number[] = [];
   for (let t = gridStart; t <= gridEnd; t += 60) hours.push(t);
-  const totalHeight = ((gridEnd - gridStart) / 60) * ROW_HEIGHT;
 
   return (
     <div className="schedule-view">
       {venues.length > 0 && (
         <div
           className="schedule-grid"
-          style={{
-            gridTemplateColumns: `56px ${venues
-              .map((v) => `${columnWidthByVenue.get(v)}px`)
-              .join(" ")}`,
-          }}
+          style={{ gridTemplateColumns: `56px repeat(${venues.length}, ${COLUMN_WIDTH}px)` }}
         >
           <div className="schedule-grid-corner" />
           {venues.map((v) => (
-            <div
-              key={v}
-              className="schedule-grid-venue-header"
-              style={{ width: columnWidthByVenue.get(v) }}
-            >
+            <div key={v} className="schedule-grid-venue-header">
               {v}
             </div>
           ))}
@@ -225,11 +225,7 @@ export default function ScheduleView({ pins, categories, hiddenVenues }: Schedul
           </div>
 
           {venues.map((venue) => (
-            <div
-              key={venue}
-              className="schedule-grid-column"
-              style={{ height: totalHeight, width: columnWidthByVenue.get(venue) }}
-            >
+            <div key={venue} className="schedule-grid-column" style={{ height: totalHeight }}>
               {hours.map((h) => (
                 <div
                   key={h}
@@ -242,10 +238,8 @@ export default function ScheduleView({ pins, categories, hiddenVenues }: Schedul
                   key={e.key}
                   className="schedule-block"
                   style={{
-                    top: ((e.startMinutes - gridStart) / 60) * ROW_HEIGHT,
-                    height: Math.max(((e.endMinutes - e.startMinutes) / 60) * ROW_HEIGHT, MIN_BLOCK_HEIGHT),
-                    left: e.lane * LANE_WIDTH,
-                    width: LANE_WIDTH,
+                    top: e.top,
+                    height: e.height,
                     background: `color-mix(in srgb, ${e.color} 18%, var(--map-surface))`,
                     borderLeftColor: e.color,
                     opacity: e.cancelled ? 0.5 : 1,

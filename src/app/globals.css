@@ -263,11 +263,13 @@ body {
 }
 .schedule-block {
   position: absolute;
+  left: 0;
+  right: 0;
   box-sizing: border-box;
   border-left: 3px solid;
   border-radius: 6px;
   padding: 3px 6px;
-  margin: 0 2px;
+  margin: 0 6px;
   overflow: hidden;
   cursor: default;
 }
