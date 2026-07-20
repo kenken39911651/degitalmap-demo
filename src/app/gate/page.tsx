@@ -1,43 +1,48 @@
-"use client";
+import type { Metadata } from "next";
+import { createClient } from "@/lib/supabase/server";
+import GateForm from "./GateForm";
 
-import { Suspense, useActionState } from "react";
-import { useSearchParams } from "next/navigation";
-import { unlockSite, type GateState } from "./actions";
-
-const initialState: GateState = { status: "idle" };
-
-function GateForm() {
-  const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/";
-  const [state, action, pending] = useActionState(unlockSite, initialState);
-
-  return (
-    <form action={action} className="flex flex-col gap-3">
-      <input type="hidden" name="next" value={next} />
-      <label htmlFor="password" className="text-sm font-medium">
-        合言葉
-      </label>
-      <input
-        id="password"
-        name="password"
-        type="password"
-        required
-        autoFocus
-        className="rounded-lg border border-neutral-300 px-4 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-      />
-      {state.status === "error" && <p className="text-sm text-red-600">{state.message}</p>}
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
-      >
-        {pending ? "確認中…" : "入る"}
-      </button>
-    </form>
-  );
+interface PageProps {
+  searchParams: Promise<{ next?: string }>;
 }
 
-export default function GatePage() {
+// リンクプレビュー(LINE/Slack/Xなど)は合言葉クッキーを持たずにアクセスしてくる
+// ため、まず合言葉ページにリダイレクトされる。その際もURLの遷移先(next)から
+// マップを特定し、プレビューにはマップ名を出す(中身はここでは見せない)。
+async function findMapForNext(next: string | undefined) {
+  if (!next) return null;
+  const match = next.match(/^\/m\/([^/?]+)/);
+  if (!match) return null;
+  const slug = decodeURIComponent(match[1]);
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("event_maps")
+    .select("title, description")
+    .eq("slug", slug)
+    .eq("status", "published")
+    .maybeSingle();
+  return data;
+}
+
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const { next } = await searchParams;
+  const map = await findMapForNext(next);
+  if (!map) return {};
+
+  return {
+    title: `${map.title} | デジタルマップ`,
+    description: map.description ?? `${map.title}のイベントマップ`,
+    openGraph: {
+      title: map.title,
+      description: map.description ?? undefined,
+      type: "website",
+    },
+  };
+}
+
+export default async function GatePage({ searchParams }: PageProps) {
+  const { next } = await searchParams;
+
   return (
     <div className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-6 px-6">
       <div>
@@ -46,9 +51,7 @@ export default function GatePage() {
           関係者向けのテスト段階です。合言葉を入力してください。
         </p>
       </div>
-      <Suspense fallback={null}>
-        <GateForm />
-      </Suspense>
+      <GateForm next={next ?? "/"} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { SITE_GATE_COOKIE, expectedGateValue } from "@/lib/siteGate";
+import { SITE_GATE_COOKIE, expectedGateValue, isMapPubliclyAccessible } from "@/lib/siteGate";
 
 // Next.js 16renames Middleware to Proxy (same underlying mechanism/API).
 // This optionally gates the entire site behind a shared testing password,
@@ -16,6 +16,13 @@ export async function proxy(request: NextRequest) {
     if (expected) {
       const cookieValue = request.cookies.get(SITE_GATE_COOKIE)?.value;
       if (cookieValue !== expected) {
+        // マップごとに「合言葉なしで公開」を選べる。公開マップだけは、
+        // サイト全体の合言葉より先にこちらを確認する。
+        const mapMatch = pathname.match(/^\/m\/([^/]+)/);
+        if (mapMatch && (await isMapPubliclyAccessible(decodeURIComponent(mapMatch[1])))) {
+          return NextResponse.next();
+        }
+
         const gateUrl = new URL("/gate", request.url);
         gateUrl.searchParams.set("next", pathname + request.nextUrl.search);
         return NextResponse.redirect(gateUrl);

@@ -20,6 +20,7 @@ export interface EventMap {
   event_date_end: string | null;
   notice_text: string | null;
   hidden_schedule_venues: string[];
+  require_site_password: boolean;
   published_at: string | null;
   published_snapshot: PublishedSnapshot | null;
   created_at: string;

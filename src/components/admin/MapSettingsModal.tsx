@@ -14,6 +14,7 @@ interface MapSettingsModalProps {
     | "event_date_end"
     | "notice_text"
     | "hidden_schedule_venues"
+    | "require_site_password"
   >;
   venues: string[];
   onClose: () => void;
@@ -28,6 +29,7 @@ export default function MapSettingsModal({ map, venues, onClose }: MapSettingsMo
   const [hiddenVenues, setHiddenVenues] = useState<Set<string>>(
     () => new Set(map.hidden_schedule_venues)
   );
+  const [requireSitePassword, setRequireSitePassword] = useState(map.require_site_password);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -56,6 +58,7 @@ export default function MapSettingsModal({ map, venues, onClose }: MapSettingsMo
           eventDateEnd,
           noticeText,
           hiddenScheduleVenues: Array.from(hiddenVenues),
+          requireSitePassword,
         });
         onClose();
       } catch {
@@ -122,6 +125,21 @@ export default function MapSettingsModal({ map, venues, onClose }: MapSettingsMo
               placeholder="例：荒天時は中止となる場合があります。会場内は禁煙です。"
               className="rounded-lg border border-neutral-300 px-3 py-2 text-sm font-normal dark:border-neutral-700 dark:bg-neutral-950"
             />
+          </label>
+
+          <label className="flex items-start gap-2 text-sm font-medium">
+            <input
+              type="checkbox"
+              checked={requireSitePassword}
+              onChange={(e) => setRequireSitePassword(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>
+              合言葉がないと閲覧できないようにする
+              <span className="mt-0.5 block text-xs font-normal text-neutral-500">
+                チェックを外すと、このマップのURLは合言葉なしで誰でも直接開けるようになります（サイト全体の合言葉設定とは別に、このマップだけ公開できます）。
+              </span>
+            </span>
           </label>
 
           {venues.length > 0 && (
