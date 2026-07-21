@@ -135,8 +135,6 @@ export default function AdminMapEditor({ map, categories, pins, gtfsFeeds }: Adm
             centerLat={map.center_lat}
             centerLng={map.center_lng}
             zoom={map.default_zoom}
-            basemap={map.basemap}
-            brandColor={map.brand_color}
             centerLabel={map.title}
             showCenterMarker={false}
             categories={categories}

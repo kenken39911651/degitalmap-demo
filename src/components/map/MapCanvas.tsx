@@ -4,12 +4,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { MapCategory, Pin } from "@/lib/types";
-import {
-  applyBrandTint,
-  applyJapaneseLabels,
-  BasemapToggleControl,
-  styleUrlFor,
-} from "./maptilerBasemap";
+import { osmStyle } from "./basemap";
 import { fetchUpcomingDepartures } from "@/lib/gtfs/clientTimetable";
 
 export interface MapCanvasHandle {
@@ -21,8 +16,6 @@ interface MapCanvasProps {
   centerLat: number;
   centerLng: number;
   zoom: number;
-  basemap: "std" | "photo";
-  brandColor?: string;
   centerLabel?: string;
   /** 管理画面では実ピンと重なって紛らわしいため非表示にする(既定は表示)。 */
   showCenterMarker?: boolean;
@@ -199,8 +192,6 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
     centerLat,
     centerLng,
     zoom,
-    basemap,
-    brandColor = "#c0472e",
     centerLabel,
     showCenterMarker = true,
     showGeolocate = false,
@@ -229,7 +220,7 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: styleUrlFor(basemap),
+      style: osmStyle(),
       center: [centerLng, centerLat],
       zoom,
       // 会場マップに地図の回転は不要で、スマホのピンチズーム時に指が
@@ -244,12 +235,6 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
     // top-leftはモバイルで浮動の「イベント一覧」ボタンと重なるため、
     // ズームボタンはbottom-leftに配置する。
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-left");
-    map.addControl(
-      new BasemapToggleControl(basemap, brandColor, () => {
-        /* handled via re-render on parent state if needed */
-      }),
-      "top-right"
-    );
 
     if (showGeolocate) {
       const geolocate = new maplibregl.GeolocateControl({
@@ -267,11 +252,6 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
       });
       map.addControl(geolocate, "bottom-left");
     }
-
-    map.once("style.load", () => {
-      applyBrandTint(map, basemap, brandColor);
-      applyJapaneseLabels(map);
-    });
 
     map.on("click", (e) => {
       onMapClickRef.current?.(e.lngLat.lat, e.lngLat.lng);
@@ -377,14 +357,6 @@ const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas
     if (map.isStyleLoaded()) render();
     else map.once("style.load", render);
   }, [pins, categories, activeCategoryIds]);
-
-  // Keep basemap/brand color in sync if changed from outside (e.g. wizard step)
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
-    applyBrandTint(map, basemap, brandColor);
-    applyJapaneseLabels(map);
-  }, [basemap, brandColor]);
 
   useImperativeHandle(ref, () => ({
     flyTo(lat, lng, targetZoom) {

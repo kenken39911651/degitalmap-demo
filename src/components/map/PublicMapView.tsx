@@ -176,8 +176,6 @@ export default function PublicMapView({ map, categories, pins }: PublicMapViewPr
               centerLat={map.center_lat}
               centerLng={map.center_lng}
               zoom={map.default_zoom}
-              brandColor={map.brand_color}
-              basemap={map.basemap}
               centerLabel={map.title}
               showGeolocate
               categories={categories}

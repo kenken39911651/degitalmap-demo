@@ -125,8 +125,6 @@ export default function MapCenterStep({
           centerLat={lat}
           centerLng={lng}
           zoom={16}
-          basemap={basemap}
-          brandColor={brandColor}
           categories={[]}
           pins={[]}
           activeCategoryIds={new Set()}
